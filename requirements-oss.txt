@@ -1,0 +1,21 @@
+# Open-source, local-only stack (no API keys). Two extra venvs, because the models pin different torch versions.
+#
+# 1) .venv-oss  (Python 3.12): voice cloning + Whisper QC
+#    uv venv --python 3.12 .venv-oss
+#    uv pip install --python .venv-oss/bin/python --index-strategy unsafe-best-match \
+#        --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-oss.txt
+chatterbox-tts==0.1.7          # MIT; zero-shot clone + voice conversion; adds Resemble's Perth watermark
+kokoro==0.9.4                  # Apache-2.0; stock voices only, no cloning (Python < 3.13)
+setuptools<81                  # Perth watermarker imports pkg_resources
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+soundfile
+numpy
+requests
+#
+# 2) .venv-nemo (Python 3.11): AI4Bharat IndicConformer Kannada ASR
+#    uv venv --python 3.11 .venv-nemo
+#    uv pip install --python .venv-nemo/bin/python --index-strategy unsafe-best-match \
+#        --extra-index-url https://download.pytorch.org/whl/cpu "nemo_toolkit[asr]==2.5.3" "transformers>=4.51,<5" "setuptools<81" soundfile
+#    curl -L -o models/indicconformer_stt_kn_hybrid_rnnt_large.nemo \
+#        https://objectstore.e2enetworks.net/indicconformer/models/indicconformer_stt_kn_hybrid_rnnt_large.nemo
+#    (MIT, linked from github.com/AI4Bharat/IndicConformerASR; no Hugging Face account needed)
