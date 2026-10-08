@@ -81,3 +81,10 @@ def test_speech_phrases_between_pauses():
     assert speech_phrases([(0.0, 0.5), (3.0, 3.6), (5.9, 6.0)], total=6.0) == [(0.5, 3.0), (3.6, 5.9)]
     long = speech_phrases([(10.0, 10.5)], total=40.0, max_len=15.0)
     assert all(e - s <= 15.0 for s, e in long) and long[0][0] == 0.0 and long[-1][1] == 40.0
+
+
+def test_wer():
+    from reeldub.voice import wer
+    assert wer("Hello everyone, namaskara!", "hello everyone namaskara") == 0.0
+    assert wer("one two three four", "one three four") == 0.25
+    assert wer("a b", "") == 1.0

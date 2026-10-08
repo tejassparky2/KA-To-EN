@@ -138,6 +138,20 @@ def cmd_create_voice(a):
 
 def _tts(a):
     from . import voice
+    if a.tts in ("chatterbox", "chatterbox-ml", "kokoro-vc"):
+        ref = Path(a.ref)
+        if not ref.exists():
+            raise SystemExit(f"reference clip {ref} not found; run `make-ref` first")
+        if a.tts == "kokoro-vc":
+            engine, tag = voice.KokoroVCEngine(ref, kokoro_voice=a.kokoro_voice), f"kokoro-vc:{a.kokoro_voice}"
+        else:
+            engine = voice.ChatterboxEngine(ref, multilingual=a.tts == "chatterbox-ml",
+                                            exaggeration=a.exaggeration, cfg_weight=a.cfg)
+            tag = f"{a.tts}:{a.exaggeration}:{a.cfg}"
+        tag += f":{ref.stat().st_size}:{ref.stat().st_mtime_ns}"
+        if a.qc:
+            engine = voice.CheckedEngine(engine, tries=a.qc)
+        return engine, tag
     vid = a.voice_id or voice.load_voice(a.tts)
     if not vid:
         raise SystemExit(f"no {a.tts} voice id; run `create-voice --backend {a.tts}` or pass --voice-id")
@@ -193,6 +207,8 @@ def cmd_synth(a):
         fits = timeline.plan_fit(script, naturals)
 
     timeline.assemble(script, clips, fits, wd / "voice_en.wav")
+    if getattr(engine, "log", None):
+        (wd / "qc_report.json").write_text(json.dumps(engine.log, indent=2, ensure_ascii=False))
     (wd / "fit_report.json").write_text(json.dumps([asdict(f) for f in fits], indent=2))
     for f, s in zip(fits, script.segments):
         mark = {"ok": " ", "stretched": "~", "over_accept": "!", "too_long": "X"}[f.status]
@@ -321,8 +337,14 @@ def main(argv=None):
 
     s = sub.add_parser("synth", help="speak script.json in her voice, fitted to timing -> voice_en.wav")
     s.add_argument("work")
-    s.add_argument("--tts", choices=["sarvam", "elevenlabs"], default="sarvam")
+    s.add_argument("--tts", choices=["sarvam", "elevenlabs", "chatterbox", "chatterbox-ml", "kokoro-vc"],
+                   default="sarvam", help="chatterbox* and kokoro-vc are open-source and run locally")
     s.add_argument("--voice-id")
+    s.add_argument("--ref", default="voices/ref.wav", help="her reference clip, for the open-source engines")
+    s.add_argument("--exaggeration", type=float, default=0.6, help="Chatterbox expressiveness")
+    s.add_argument("--cfg", type=float, default=0.6, help="Chatterbox cfg_weight; 0 strips her accent, keep ~0.5-0.6")
+    s.add_argument("--kokoro-voice", default="bf_emma", help="Kokoro stock voice used under voice conversion")
+    s.add_argument("--qc", type=int, default=0, help="re-record lines Whisper mishears, up to N takes (open-source engines)")
     s.add_argument("--model", help="ElevenLabs model (default eleven_multilingual_v2; avoid eleven_v4 with a Kannada clone)")
     s.add_argument("--auto-shorten", action="store_true", help="ask Claude to shorten lines that don't fit, once")
     s.set_defaults(fn=cmd_synth)

@@ -110,6 +110,12 @@ def transcribe_whisper(vocals: Path, workdir: Path, model: str = "vasista22/whis
     total = media.duration(mono)
     phrases = speech_phrases(media.detect_silences(mono, min_dur=0.35), total)
     asr = pipeline("automatic-speech-recognition", model=model, device="cuda:0" if torch.cuda.is_available() else "cpu")
+    if not hasattr(asr.model.generation_config, "lang_to_id"):
+        # 2022-era fine-tunes ship a generation config without language tables; borrow the base model's
+        # (fix recommended in huggingface/transformers#25084).
+        from transformers import GenerationConfig
+        base = "openai/whisper-" + next((s for s in ("large-v2", "medium", "small", "base", "tiny") if s in model), "medium")
+        asr.model.generation_config = GenerationConfig.from_pretrained(base)
     audio = media.read_audio(mono, sr=16000)[:, 0]
     segs = []
     for s, e in phrases:
