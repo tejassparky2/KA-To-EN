@@ -213,7 +213,7 @@ def cmd_synth(a):
         (wd / "qc_report.json").write_text(json.dumps(engine.log, indent=2, ensure_ascii=False))
     (wd / "fit_report.json").write_text(json.dumps([asdict(f) for f in fits], indent=2))
     for f, s in zip(fits, script.segments):
-        mark = {"ok": " ", "stretched": "~", "over_accept": "!", "too_long": "X"}[f.status]
+        mark = {"ok": " ", "slowed": "<", "stretched": "~", "over_accept": "!", "too_long": "X"}[f.status]
         print(f" {mark} #{f.id:<3} {f.natural:5.2f}s in {f.slot:5.2f}s  x{f.tempo:.2f}  {s.en}")
     worst = [f for f in fits if f.status in ("over_accept", "too_long")]
     print(f"\n-> {wd/'voice_en.wav'}")

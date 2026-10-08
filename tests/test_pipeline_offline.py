@@ -65,7 +65,7 @@ def test_offline_pipeline(reel, tmp_path, monkeypatch):
 
     cli.main(["synth", str(wd)])
     fits = json.loads((wd / "fit_report.json").read_text())
-    assert [f["status"] for f in fits][0] == "ok"
+    assert [f["status"] for f in fits][0] in ("ok", "slowed")  # short line fits (slowed at most to MIN_TEMPO)
     assert fits[1]["tempo"] > 1.0  # the long line had to be sped up
     assert abs(media.duration(wd / "voice_en.wav") - media.duration(wd / "audio.wav")) < 0.05
 

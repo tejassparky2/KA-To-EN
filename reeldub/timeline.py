@@ -20,6 +20,7 @@ from .segments import Script, slot_end
 
 ACCEPT_TEMPO = 1.2
 HARD_TEMPO = 1.4
+MIN_TEMPO = 0.88  # slowest we go to make a short English line last as long as her Kannada one
 
 
 @dataclass
@@ -29,19 +30,25 @@ class Fit:
     natural: float  # seconds the TTS line takes at normal speed
     slot: float  # seconds available
     tempo: float
-    status: str  # ok | stretched | over_accept | too_long
+    status: str  # ok | slowed | stretched | over_accept | too_long
 
     @property
     def placed(self) -> float:
         return self.natural / self.tempo
 
 
-def plan_fit(script: Script, naturals: list[float], accept: float = ACCEPT_TEMPO, hard: float = HARD_TEMPO) -> list[Fit]:
+def plan_fit(script: Script, naturals: list[float], accept: float = ACCEPT_TEMPO, hard: float = HARD_TEMPO,
+             slowest: float = MIN_TEMPO) -> list[Fit]:
+    """Tempo per line: speed up a line that overruns its slot, slow down (a little) one that ends before she does,
+    so the English starts and stops with her mouth instead of leaving a silent gap."""
     fits = []
     for i, (seg, nat) in enumerate(zip(script.segments, naturals)):
         slot = slot_end(script.segments, i, script.total) - seg.start
         ratio = nat / slot if slot > 0 else float("inf")
-        if ratio <= 1.0:
+        if nat < seg.dur * 0.97 and nat > 0:
+            tempo = max(nat / seg.dur, slowest)
+            tempo, status = (round(tempo, 4), "slowed") if tempo < 0.99 else (1.0, "ok")
+        elif ratio <= 1.0:
             tempo, status = 1.0, "ok"
         elif ratio <= accept:
             tempo, status = ratio, "stretched"

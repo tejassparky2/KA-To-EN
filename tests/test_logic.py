@@ -114,3 +114,10 @@ def test_bed_is_voice_leak_tells_leftover_voice_from_music(tmp_path):
     music = 0.05 * np.sin(2 * np.pi * 330 * t) + leak
     assert bed_is_voice_leak(media.write_audio(tmp_path / "leak.wav", leak[:, None]), sc)[0]
     assert not bed_is_voice_leak(media.write_audio(tmp_path / "music.wav", music[:, None]), sc)[0]
+
+
+def test_plan_fit_slows_short_lines_to_her_length_within_limit():
+    sc = _script([(0.0, 2.0), (3.0, 5.0)], total=6.0)
+    fits = plan_fit(sc, [1.9, 1.0])
+    assert fits[0].status == "slowed" and abs(fits[0].placed - 2.0) < 0.01
+    assert fits[1].status == "slowed" and fits[1].tempo == 0.88  # never slower than MIN_TEMPO
