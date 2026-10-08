@@ -1,0 +1,14 @@
+# API clients (versions verified while building this pipeline, Oct 2026)
+sarvamai==0.1.36
+elevenlabs==2.71.0
+anthropic==1.12.1
+fal-client==1.0.3
+requests
+yt-dlp==2026.8.19
+# local audio
+audio-separator[cpu]==0.47.0   # use audio-separator[gpu] on a CUDA machine
+audioread                      # needed by audio-separator on Python 3.13
+soundfile
+numpy
+# tests
+pytest
