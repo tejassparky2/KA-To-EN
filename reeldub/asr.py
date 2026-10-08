@@ -157,6 +157,40 @@ def transcribe_whisper(vocals: Path, workdir: Path, model: str = "vasista22/whis
     return merge_short(segs)
 
 
+INDICCONFORMER_KN = "https://objectstore.e2enetworks.net/indicconformer/models/indicconformer_stt_kn_hybrid_rnnt_large.nemo"
+
+
+def transcribe_indicconformer(vocals: Path, workdir: Path, model: Path = Path("models/indicconformer_stt_kn_hybrid_rnnt_large.nemo"),
+                              nemo_python: str = ".venv-nemo/bin/python") -> list[Segment]:
+    """Open-source AI4Bharat IndicConformer (MIT), Kannada-only checkpoint from AI4Bharat's public object store
+    (linked from github.com/AI4Bharat/IndicConformerASR; no Hugging Face account needed). Runs on CPU via NeMo,
+    in its own venv. Phrases are cut at pauses / energy dips like the Whisper backend.
+    """
+    import json
+    import subprocess
+
+    if not model.exists():
+        raise SystemExit(f"model not found: {model}\n  download it with: curl -L -o {model} {INDICCONFORMER_KN}")
+    mono = media.to_mono(vocals, workdir / "vocals_16k.wav")
+    total = media.duration(mono)
+    audio = media.read_audio(mono, sr=16000)[:, 0]
+    silences = media.detect_silences(mono, noise_db=media.loudness_lufs(mono) - 10.0, min_dur=0.25)
+    phrases = [p for s, e in speech_phrases(silences, total, max_len=1e9) for p in energy_cuts(audio, 16000, s, e)]
+    chunk_dir = workdir / "asr_chunks"
+    chunk_dir.mkdir(exist_ok=True)
+    wavs = [media.cut(mono, chunk_dir / f"phrase_{i:03d}.wav", max(0.0, s - 0.1), min(total, e + 0.1))
+            for i, (s, e) in enumerate(phrases)]
+    out = workdir / "asr_texts.json"
+    runner = Path(__file__).with_name("nemo_asr.py")
+    subprocess.run([nemo_python, str(runner), str(model), str(out), *map(str, wavs)], check=True)
+    texts = json.loads(out.read_text(encoding="utf-8"))
+    segs = [Segment(id=0, start=round(s, 3), end=round(e, 3), kn=t.strip())
+            for (s, e), t in zip(phrases, texts) if t.strip()]
+    for i, s in enumerate(segs):
+        s.id = i
+    return merge_short(segs)
+
+
 def group_words(words: list[tuple[float, float, str]], max_gap: float = 0.45, max_len: float = 8.0) -> list[Segment]:
     """Group word timings into phrases at pauses (> max_gap) or when a phrase gets long."""
     segs: list[Segment] = []

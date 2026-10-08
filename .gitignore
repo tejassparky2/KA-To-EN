@@ -1,9 +1,11 @@
+*.pyc
+.env
+.pytest_cache/
+.venv-nemo/
+.venv-oss/
 .venv/
 __pycache__/
-*.pyc
-.pytest_cache/
-.env
-work/
+models/
 reels/
 voices/
-.venv-oss/
+work/
