@@ -74,3 +74,10 @@ def test_best_window_prefers_dense_speech():
     sc = _script([(0.0, 1.0), (5.0, 9.0), (9.2, 13.0), (13.1, 14.5)], total=20.0)
     s, e = best_window(sc, 10.0)
     assert (s, e) == (5.0, 14.5)
+
+
+def test_speech_phrases_between_pauses():
+    from reeldub.asr import speech_phrases
+    assert speech_phrases([(0.0, 0.5), (3.0, 3.6), (5.9, 6.0)], total=6.0) == [(0.5, 3.0), (3.6, 5.9)]
+    long = speech_phrases([(10.0, 10.5)], total=40.0, max_len=15.0)
+    assert all(e - s <= 15.0 for s, e in long) and long[0][0] == 0.0 and long[-1][1] == 40.0

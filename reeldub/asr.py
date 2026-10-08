@@ -78,6 +78,50 @@ def transcribe_sarvam(vocals: Path, workdir: Path, model: str = "saaras:v4", mod
     return merge_short(segs)
 
 
+def speech_phrases(silences: list[tuple[float, float]], total: float, min_speech: float = 0.3,
+                   max_len: float = 15.0) -> list[tuple[float, float]]:
+    """Speech intervals between pauses, each <= max_len (long ones are cut at their own inner pauses)."""
+    spans, pos = [], 0.0
+    for s, e in sorted(silences):
+        if s - pos >= min_speech:
+            spans.append((pos, s))
+        pos = max(pos, e)
+    if total - pos >= min_speech:
+        spans.append((pos, total))
+    out = []
+    for s, e in spans:
+        if e - s <= max_len:
+            out.append((s, e))
+        else:
+            inner = [(a - s, b - s) for a, b in silences if s < a and b < e]
+            out += [(s + a, s + b) for a, b in plan_chunks(inner, e - s, max_len=max_len)]
+    return out
+
+
+def transcribe_whisper(vocals: Path, workdir: Path, model: str = "vasista22/whisper-kannada-medium") -> list[Segment]:
+    """Open-source, offline (Apache-2.0). Phrases come from pause detection; each is transcribed on its own.
+
+    Caveat: this fine-tune's 7.65% FLEURS WER is on a test set whose train split it saw; expect worse on reels.
+    """
+    import torch
+    from transformers import pipeline
+
+    mono = media.to_mono(vocals, workdir / "vocals_16k.wav")
+    total = media.duration(mono)
+    phrases = speech_phrases(media.detect_silences(mono, min_dur=0.35), total)
+    asr = pipeline("automatic-speech-recognition", model=model, device="cuda:0" if torch.cuda.is_available() else "cpu")
+    audio = media.read_audio(mono, sr=16000)[:, 0]
+    segs = []
+    for s, e in phrases:
+        pad_s, pad_e = max(0.0, s - 0.1), min(total, e + 0.1)
+        clip = audio[int(pad_s * 16000): int(pad_e * 16000)]
+        text = asr({"raw": clip, "sampling_rate": 16000},
+                   generate_kwargs={"language": "kn", "task": "transcribe"})["text"].strip()
+        if text:
+            segs.append(Segment(id=len(segs), start=round(s, 3), end=round(e, 3), kn=text))
+    return merge_short(segs)
+
+
 def group_words(words: list[tuple[float, float, str]], max_gap: float = 0.45, max_len: float = 8.0) -> list[Segment]:
     """Group word timings into phrases at pauses (> max_gap) or when a phrase gets long."""
     segs: list[Segment] = []

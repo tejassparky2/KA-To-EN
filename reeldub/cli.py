@@ -71,6 +71,8 @@ def cmd_prepare(a):
     print(f"transcribing Kannada with {a.asr}...")
     if a.asr == "sarvam":
         segs = asr.transcribe_sarvam(wd / "vocals.wav", wd, model=a.model, mode=a.mode, literal=not a.no_literal)
+    elif a.asr == "whisper":
+        segs = asr.transcribe_whisper(wd / "vocals.wav", wd)
     else:
         segs = asr.transcribe_elevenlabs(wd / "vocals.wav", wd)
     script = Script(segments=segs, total=total, meta={"asr": a.asr, "asr_model": a.model, "source": str(video)})
@@ -287,7 +289,8 @@ def main(argv=None):
 
     s = sub.add_parser("prepare", help="separate music + transcribe Kannada -> transcript.json")
     s.add_argument("video")
-    s.add_argument("--asr", choices=["sarvam", "elevenlabs"], default="sarvam")
+    s.add_argument("--asr", choices=["sarvam", "whisper", "elevenlabs"], default="sarvam",
+                   help="whisper = open-source vasista22/whisper-kannada-medium, runs offline")
     s.add_argument("--model", default="saaras:v4", help="Sarvam model (saaras:v4 default, saaras:v3 benchmarked)")
     s.add_argument("--mode", default="codemix", choices=["codemix", "transcribe", "verbatim"])
     s.add_argument("--no-literal", action="store_true", help="skip Sarvam's direct speech->English cross-check")
