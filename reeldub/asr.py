@@ -98,6 +98,32 @@ def speech_phrases(silences: list[tuple[float, float]], total: float, min_speech
     return out
 
 
+def energy_cuts(audio, sr: int, start: float, end: float, max_len: float = 7.0, min_len: float = 2.5,
+                frame: float = 0.05) -> list[tuple[float, float]]:
+    """Split [start, end] into pieces <= max_len, cutting at the quietest frame in each allowed window.
+
+    Fast reel delivery often has no real pauses, so pause detection alone leaves long chunks; the
+    quietest point between words is the next best cut.
+    """
+    import numpy as np
+    w = int(frame * sr)
+    seg = audio[int(start * sr): int(end * sr)]
+    n = len(seg) // w
+    if n == 0:
+        return [(start, end)]
+    db = 20 * np.log10(np.sqrt((seg[: n * w].reshape(n, w) ** 2).mean(1)) + 1e-9)
+    db = np.convolve(db, np.ones(3) / 3, mode="same")
+    out, pos = [], 0.0
+    total = end - start
+    while total - pos > max_len:
+        lo, hi = int((pos + min_len) / frame), int((pos + max_len) / frame)
+        cut = (lo + int(np.argmin(db[lo:hi]))) * frame
+        out.append((start + pos, start + cut))
+        pos = cut
+    out.append((start + pos, end))
+    return out
+
+
 def transcribe_whisper(vocals: Path, workdir: Path, model: str = "vasista22/whisper-kannada-medium") -> list[Segment]:
     """Open-source, offline (Apache-2.0). Phrases come from pause detection; each is transcribed on its own.
 
@@ -108,7 +134,9 @@ def transcribe_whisper(vocals: Path, workdir: Path, model: str = "vasista22/whis
 
     mono = media.to_mono(vocals, workdir / "vocals_16k.wav")
     total = media.duration(mono)
-    phrases = speech_phrases(media.detect_silences(mono, min_dur=0.35), total)
+    audio = media.read_audio(mono, sr=16000)[:, 0]
+    silences = media.detect_silences(mono, noise_db=media.loudness_lufs(mono) - 10.0, min_dur=0.25)
+    phrases = [p for s, e in speech_phrases(silences, total, max_len=1e9) for p in energy_cuts(audio, 16000, s, e)]
     asr = pipeline("automatic-speech-recognition", model=model, device="cuda:0" if torch.cuda.is_available() else "cpu")
     if not hasattr(asr.model.generation_config, "lang_to_id"):
         # 2022-era fine-tunes ship a generation config without language tables; borrow the base model's
@@ -116,13 +144,14 @@ def transcribe_whisper(vocals: Path, workdir: Path, model: str = "vasista22/whis
         from transformers import GenerationConfig
         base = "openai/whisper-" + next((s for s in ("large-v2", "medium", "small", "base", "tiny") if s in model), "medium")
         asr.model.generation_config = GenerationConfig.from_pretrained(base)
-    audio = media.read_audio(mono, sr=16000)[:, 0]
     segs = []
     for s, e in phrases:
         pad_s, pad_e = max(0.0, s - 0.1), min(total, e + 0.1)
         clip = audio[int(pad_s * 16000): int(pad_e * 16000)]
         text = asr({"raw": clip, "sampling_rate": 16000},
-                   generate_kwargs={"language": "kn", "task": "transcribe"})["text"].strip()
+                   generate_kwargs={"language": "kn", "task": "transcribe", "num_beams": 1,
+                                    "no_repeat_ngram_size": 4,
+                                    "max_new_tokens": int(14 * (pad_e - pad_s)) + 8})["text"].strip()
         if text:
             segs.append(Segment(id=len(segs), start=round(s, 3), end=round(e, 3), kn=text))
     return merge_short(segs)

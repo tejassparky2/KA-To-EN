@@ -88,3 +88,14 @@ def test_wer():
     assert wer("Hello everyone, namaskara!", "hello everyone namaskara") == 0.0
     assert wer("one two three four", "one three four") == 0.25
     assert wer("a b", "") == 1.0
+
+
+def test_energy_cuts_split_at_quiet_point():
+    import numpy as np
+    from reeldub.asr import energy_cuts
+    sr = 1000
+    x = np.ones(12 * sr, dtype=np.float32)
+    x[5000:5100] = 0.0  # a quiet dip at 5.0 s
+    cuts = energy_cuts(x, sr, 0.0, 12.0, max_len=7.0, min_len=2.5, frame=0.05)
+    assert abs(cuts[0][1] - 5.0) < 0.1 and cuts[-1][1] == 12.0
+    assert all(e - s <= 7.0 for s, e in cuts)
