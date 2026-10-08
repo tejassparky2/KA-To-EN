@@ -195,15 +195,8 @@ class ChatterboxEngine:
         device = "cuda" if torch.cuda.is_available() else "cpu"
         if multilingual:
             from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-            if device == "cpu":  # chatterbox 0.1.7's multilingual loader calls torch.load without map_location
-                _load = torch.load
-                torch.load = lambda *a, **k: _load(*a, **{"map_location": "cpu", **k})
-                try:
-                    self.model = ChatterboxMultilingualTTS.from_pretrained(device=torch.device(device))
-                finally:
-                    torch.load = _load
-            else:
-                self.model = ChatterboxMultilingualTTS.from_pretrained(device=torch.device(device))
+            # Pass a plain string: chatterbox 0.1.7 checks `device in ["cpu", "mps"]` to load CUDA-saved weights on CPU.
+            self.model = ChatterboxMultilingualTTS.from_pretrained(device=device)
         else:
             from chatterbox.tts import ChatterboxTTS
             self.model = ChatterboxTTS.from_pretrained(device=device)
