@@ -237,9 +237,17 @@ def cmd_perform(a):
 
 
 def cmd_mix(a):
-    from .timeline import mix
+    from .timeline import bed_is_voice_leak, mix
     wd = _workdir(a.work)
-    mix(wd / "voice_en.wav", wd / "bed.wav", wd / "vocals.wav", wd / "mix.wav", room=a.room, duck=not a.no_duck)
+    bed = wd / "bed.wav"
+    if a.bed == "auto":
+        leak, in_speech, in_gaps = bed_is_voice_leak(bed, Script.load(wd / "transcript.json"))
+        print(f"music bed: {in_speech:.1f} dB under her lines, {in_gaps:.1f} dB between them")
+        if leak:
+            print("  no music, only leftover Kannada voice -> dropping the bed (use --bed keep to override)")
+    if a.bed == "drop" or (a.bed == "auto" and leak):
+        bed = media.write_audio(wd / "bed_silent.wav", 0 * media.read_audio(bed))
+    mix(wd / "voice_en.wav", bed, wd / "vocals.wav", wd / "mix.wav", room=a.room, duck=not a.no_duck)
     media.mux(wd / "source.mp4", wd / "mix.wav", wd / "dubbed.mp4")
     print(f"-> {wd/'dubbed.mp4'} (English voice + original music, original video). Next: `lipsync`.")
 
@@ -362,6 +370,8 @@ def main(argv=None):
     s.add_argument("work")
     s.add_argument("--room", type=float, default=0.0, help="0-1, add a little room sound to a dry clone")
     s.add_argument("--no-duck", action="store_true")
+    s.add_argument("--bed", choices=["auto", "keep", "drop"], default="auto",
+                   help="original background: auto drops it when it is only leftover voice (no music)")
     s.set_defaults(fn=cmd_mix)
 
     s = sub.add_parser("lipsync", help="match her mouth to the English -> final.mp4 (needs FAL_KEY)")

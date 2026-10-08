@@ -82,6 +82,21 @@ def assemble(script: Script, clips: list[Path | None], fits: list[Fit], out: Pat
     return media.write_audio(out, track[:, None])
 
 
+def bed_is_voice_leak(bed: Path, script: Script, gap_floor_db: float = -55.0, margin_db: float = 15.0) -> tuple[bool, float, float]:
+    """True when the bed is near-silent between her lines but not under them: no real music, only Kannada left over
+    from separation. Returns (leak, dB under speech, dB in gaps)."""
+    x = media.read_audio(bed).mean(axis=1)
+    speech = np.zeros(len(x), bool)
+    for s in script.segments:
+        speech[int(s.start * media.SR):int(s.end * media.SR)] = True
+
+    def db(a: np.ndarray) -> float:
+        return float(20 * np.log10(np.sqrt(np.mean(a ** 2)) + 1e-9)) if len(a) else -120.0
+
+    in_speech, in_gaps = db(x[speech]), db(x[~speech])
+    return in_gaps < gap_floor_db and in_speech - in_gaps > margin_db, in_speech, in_gaps
+
+
 def mix(voice: Path, bed: Path, ref_vocals: Path, out: Path, room: float = 0.0, duck: bool = True,
         lufs: float = -14.0, true_peak: float = -1.0) -> Path:
     """Voice (loudness-matched to her original vocals) over the music bed, normalised for Reels.

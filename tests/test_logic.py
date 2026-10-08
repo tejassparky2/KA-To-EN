@@ -99,3 +99,18 @@ def test_energy_cuts_split_at_quiet_point():
     cuts = energy_cuts(x, sr, 0.0, 12.0, max_len=7.0, min_len=2.5, frame=0.05)
     assert abs(cuts[0][1] - 5.0) < 0.1 and cuts[-1][1] == 12.0
     assert all(e - s <= 7.0 for s, e in cuts)
+
+
+def test_bed_is_voice_leak_tells_leftover_voice_from_music(tmp_path):
+    import numpy as np
+
+    from reeldub import media
+    from reeldub.timeline import bed_is_voice_leak
+
+    sc = _script([(1.0, 3.0), (4.0, 6.0)], total=7.0)
+    t = np.arange(int(7.0 * media.SR)) / media.SR
+    speech = ((t >= 1) & (t < 3)) | ((t >= 4) & (t < 6))
+    leak = np.where(speech, 0.02, 0.0) * np.sin(2 * np.pi * 220 * t)
+    music = 0.05 * np.sin(2 * np.pi * 330 * t) + leak
+    assert bed_is_voice_leak(media.write_audio(tmp_path / "leak.wav", leak[:, None]), sc)[0]
+    assert not bed_is_voice_leak(media.write_audio(tmp_path / "music.wav", music[:, None]), sc)[0]
