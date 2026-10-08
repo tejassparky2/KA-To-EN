@@ -90,7 +90,7 @@ This is the part that matters most, and the part nobody has benchmarked. The res
 - **Sarvam's clone** outputs `en-IN` (Indian English). Its docs say "a hint" of the reference accent carries over,
   and that cross-lingual cloning works best with references closer to 15 s than 10 s.
 - **Best single trick: get 1–2 minutes of her speaking English** in her normal accent and clone from that
-  (`create-voice --ref-language en-IN`). With a same-language reference, even v4 keeps the accent.
+  (for Sarvam also pass `--ref-language en-IN`). With a same-language reference, ElevenLabs says even v4 keeps the accent.
 - **Most natural option, voice conversion.** Someone records the English lines in sync with the reel, in a natural
   Indian accent (or Amma herself, if she's willing). ElevenLabs then swaps in her voice, keeping that performance's
   timing, emotion and accent:
