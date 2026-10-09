@@ -226,6 +226,31 @@ def cmd_synth(a):
               "(or use --auto-shorten) and re-run synth; unchanged lines are cached.")
 
 
+def cmd_takes(a):
+    """A person read the English: cut their recording into lines and fit each to her timing -> voice_en.wav."""
+    from . import timeline
+    from .takes import import_takes
+    wd = _workdir(a.work)
+    script = Script.load(wd / "script.json")
+    clips, report = import_takes(script, Path(a.recording), wd / "takes")
+    naturals = [media.duration(c) if c else 0.0 for c in clips]
+    fits = timeline.plan_fit(script, naturals)
+    timeline.assemble(script, clips, fits, wd / "voice_en.wav")
+    (wd / "takes_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False))
+    (wd / "fit_report.json").write_text(json.dumps([asdict(f) for f in fits], indent=2))
+    heard = {r["id"]: r for r in report["lines"]}
+    for f, s in zip(fits, script.segments):
+        if not s.en.strip():
+            continue
+        r = heard[s.id]
+        mark = "?" if r["wer"] > 0.3 else {"ok": " ", "slowed": "<", "stretched": "~", "over_accept": "!",
+                                            "too_long": "X"}[f.status]
+        print(f" {mark} #{f.id:<3} {f.natural:5.2f}s in {f.slot:5.2f}s  x{f.tempo:.2f}  heard: {r['heard'] or '(missing)'}")
+    if report["dropped_pieces"]:
+        print(f"dropped (retakes / noise): {report['dropped_pieces']}")
+    print(f"\n-> {wd/'voice_en.wav'} (now run `mix`). ? = line not found or misread, X/! = much longer than her line")
+
+
 def cmd_perform(a):
     """Voice conversion route: a recorded English performance, timed to the reel, converted to her voice."""
     from . import voice
@@ -371,6 +396,11 @@ def main(argv=None):
     s.add_argument("--guide", required=True, help="WAV of someone reading the English in sync with the reel")
     s.add_argument("--voice-id")
     s.set_defaults(fn=cmd_perform)
+
+    s = sub.add_parser("takes", help="a person's recording of the English script, cut and fitted -> voice_en.wav")
+    s.add_argument("work")
+    s.add_argument("recording", help="one audio file: every line read in order, ~2 s pause between lines")
+    s.set_defaults(fn=cmd_takes)
 
     s = sub.add_parser("mix", help="English voice over the original music -> dubbed.mp4")
     s.add_argument("work")

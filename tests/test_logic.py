@@ -121,3 +121,13 @@ def test_plan_fit_slows_short_lines_to_her_length_within_limit():
     fits = plan_fit(sc, [1.9, 1.0])
     assert fits[0].status == "slowed" and abs(fits[0].placed - 2.0) < 0.01
     assert fits[1].status == "slowed" and fits[1].tempo == 0.88  # never slower than MIN_TEMPO
+
+
+def test_takes_align_keeps_order_drops_bad_retake_and_joins_split_line():
+    from reeldub.takes import align, speech_pieces
+
+    lines = ["hello instagram family", "so many people ask me", "roast black rice and make a powder"]
+    heard = ["hello instagram family", "so many uh", "so many people ask me", "roast black rice", "and make a powder"]
+    assert align(lines, heard) == [(0, 1), (2, 3), (3, 5)]  # stumble dropped, breath-split line joined
+    assert align(lines, ["hello instagram family", "roast black rice and make a powder"]) == [(0, 1), None, (1, 2)]
+    assert speech_pieces([(0.0, 0.5), (2.0, 3.0), (3.1, 3.2)], total=5.0, pad=0.0) == [(0.5, 2.0), (3.2, 5.0)]
