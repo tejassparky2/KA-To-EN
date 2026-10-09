@@ -140,6 +140,10 @@ def cmd_create_voice(a):
 
 def _tts(a):
     from . import voice
+    if a.tts == "parler":
+        engine = voice.ParlerEngine(speaker=a.speaker, style=a.style)
+        tag = f"parler:{a.speaker}:{a.style or ''}"
+        return (voice.CheckedEngine(engine, tries=a.qc) if a.qc else engine), tag
     if a.tts in ("chatterbox", "chatterbox-ml", "kokoro-vc"):
         ref = Path(a.ref)
         if not ref.exists():
@@ -348,8 +352,10 @@ def main(argv=None):
 
     s = sub.add_parser("synth", help="speak script.json in her voice, fitted to timing -> voice_en.wav")
     s.add_argument("work")
-    s.add_argument("--tts", choices=["sarvam", "elevenlabs", "chatterbox", "chatterbox-ml", "kokoro-vc"],
-                   default="sarvam", help="chatterbox* and kokoro-vc are open-source and run locally")
+    s.add_argument("--tts", choices=["sarvam", "elevenlabs", "chatterbox", "chatterbox-ml", "kokoro-vc", "parler"],
+                   default="sarvam", help="chatterbox*, kokoro-vc and parler are open-source and run locally")
+    s.add_argument("--speaker", default="Vidya", help="Indic Parler-TTS stock voice (e.g. Vidya, Anu, Mary, Kavya)")
+    s.add_argument("--style", help="Indic Parler-TTS voice description; {name} is replaced by --speaker")
     s.add_argument("--voice-id")
     s.add_argument("--ref", default="voices/ref.wav", help="her reference clip, for the open-source engines")
     s.add_argument("--exaggeration", type=float, default=0.6, help="Chatterbox expressiveness")

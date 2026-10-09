@@ -244,6 +244,44 @@ class KokoroVCEngine:
         return out
 
 
+class ParlerEngine:
+    """AI4Bharat Indic Parler-TTS (Apache-2.0): a stock Indian voice picked by name, no cloning.
+
+    Its card says it "officially supports Indian English accents"; 69 named speakers, e.g. English Mary, Swapna,
+    Meera, Kavya and Kannada Anu, Vidya. The voice and style come from a plain-English description.
+    Needs its own env (parler-tts pins transformers 4.46.1), see README.
+    """
+
+    STYLE = ("{name}'s voice is warm, friendly and slightly expressive, with a moderate speed and pitch. "
+             "The recording is of very high quality, with the speaker's voice sounding clear and very close up.")
+
+    def __init__(self, model_dir: str = "models/indic-parler", speaker: str = "Vidya", style: str | None = None,
+                 seed: int = 1234):
+        import torch
+        from parler_tts import ParlerTTSForConditionalGeneration
+        from transformers import AutoTokenizer
+        self.torch = torch
+        self.model = ParlerTTSForConditionalGeneration.from_pretrained(model_dir).eval()
+        self.tok = AutoTokenizer.from_pretrained(model_dir)
+        desc_tok = AutoTokenizer.from_pretrained(self.model.config.text_encoder._name_or_path)
+        self.desc = desc_tok((style or self.STYLE).format(name=speaker), return_tensors="pt")
+        self.seed, self.calls = seed, 0
+
+    def synth(self, text: str, out: Path, prev: str = "", nxt: str = "") -> Path:
+        import soundfile as sf
+        self.torch.manual_seed(self.seed + self.calls)  # reproducible, but a QC retake gets a fresh draw
+        self.calls += 1
+        p = self.tok(text, return_tensors="pt")
+        with self.torch.inference_mode():
+            wav = self.model.generate(input_ids=self.desc.input_ids, attention_mask=self.desc.attention_mask,
+                                      prompt_input_ids=p.input_ids, prompt_attention_mask=p.attention_mask)
+        tmp = out.with_suffix(".parler.wav")
+        sf.write(str(tmp), wav.cpu().numpy().squeeze(), self.model.config.sampling_rate)
+        media.ffmpeg("-i", str(tmp), "-ar", str(media.SR), "-ac", "1", "-c:a", "pcm_s16le", str(out))
+        tmp.unlink()
+        return out
+
+
 class CheckedEngine:
     """Re-record a line when an English ASR mishears it (up to `tries`), keeping the best take.
 
